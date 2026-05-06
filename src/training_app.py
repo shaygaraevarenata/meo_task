@@ -11,6 +11,7 @@ class TrainingApp:
 
         self.data_handler = DataHandler()
         self.trainings = self.data_handler.load_trainings()
+        self.filtered_trainings = self.trainings  # Для хранения отфильтрованных данных
 
         self.setup_ui()
         self.refresh_table()
@@ -86,9 +87,109 @@ class TrainingApp:
         training_type = self.type_entry.get()
         duration = self.duration_entry.get()
 
+        if not date or not training_type or not duration:
+            messagebox.showerror("Ошибка", "Все поля должны быть заполнены")
+            return
+
         if not self.data_handler.validate_date_format(date):
             messagebox.showerror("Ошибка", "Неверный формат даты. Используйте YYYY-MM-DD")
             return
 
         if not self.data_handler.validate_duration(duration):
-            messagebox.showerror("Ошибка", "Длительность должна быть
+            messagebox.showerror("Ошибка", "Длительность должна быть положительным числом")
+            return
+
+        try:
+            # Создаём новую запись
+            new_training = {
+                "id": len(self.trainings) + 1,
+                "date": date,
+                "type": training_type,
+                "duration": float(duration)
+            }
+
+            # Добавляем в список
+            self.trainings.append(new_training)
+
+            # Сохраняем в файл
+            self.data_handler.save_trainings(self.trainings)
+
+            # Обновляем таблицу
+            self.refresh_table()
+
+            # Очищаем поля ввода
+            self.date_entry.delete(0, tk.END)
+            self.type_entry.set("")
+            self.duration_entry.delete(0, tk.END)
+
+            messagebox.showinfo("Успех", "Тренировка добавлена успешно")
+
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось добавить тренировку: {e}")
+
+    def apply_filter(self):
+        """Применяет фильтры к данным"""
+        filter_type = self.filter_type.get()
+        date_from = self.filter_date_from.get()
+        date_to = self.filter_date_to.get()
+
+        filtered = []
+
+        for training in self.trainings:
+            # Проверка по типу тренировки
+            type_match = (filter_type == "Все" or training["type"] == filter_type)
+
+            # Проверка по дате
+            date_match = True
+            if date_from or date_to:
+                training_date = datetime.strptime(training["date"], '%Y-%m-%d')
+                if date_from:
+                    from_date = datetime.strptime(date_from, '%Y-%m-%d')
+                    date_match &= training_date >= from_date
+                if date_to:
+                    to_date = datetime.strptime(date_to, '%Y-%m-%d')
+                    date_match &= training_date <= to_date
+
+            if type_match and date_match:
+                filtered.append(training)
+
+        self.filtered_trainings = filtered
+        self.refresh_table(filtered)
+
+    def clear_filter(self):
+        """Сбрасывает фильтры"""
+        self.filter_type.set("Все")
+        self.filter_date_from.delete(0, tk.END)
+        self.filter_date_to.delete(0, tk.END)
+        # Сбрасываем отфильтрованные данные к полному списку
+        self.filtered_trainings = self.trainings
+        self.refresh_table()
+
+    def refresh_table(self, trainings=None):
+        """Обновляет таблицу с данными"""
+        # Очищаем текущую таблицу
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        # Определяем, какие данные отображать
+        if trainings is None:
+            trainings = self.filtered_trainings
+
+        # Заполняем таблицу данными
+        for training in trainings:
+            self.tree.insert("", "end", values=(
+                training["id"],
+                training["date"],
+                training["type"],
+                f"{training['duration']:.2f}"  # Форматируем длительность до 2 знаков после запятой
+            ))
+
+
+
+def main():
+    root = tk.Tk()
+    app = TrainingApp(root)
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
